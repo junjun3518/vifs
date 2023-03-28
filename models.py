@@ -186,7 +186,7 @@ class PriorEncoder(nn.Module):
 
         self.emb = nn.Embedding(n_class, hidden_channels)
         nn.init.normal_(self.emb.weight, 0.0, hidden_channels**-0.5)
-        _positional = torch.randn(1, hidden_channels, 344)
+        _positional = torch.zeros(1, hidden_channels, 344)
         self.register_buffer("positional", _positional)
         #self.encoder = attentions.Encoder(hidden_channels, filter_channels,
         #                                  n_heads, n_layers, kernel_size,
@@ -200,7 +200,7 @@ class PriorEncoder(nn.Module):
                 
 
     def forward(self, x):
-        x = self.emb(x) * math.sqrt(self.hidden_channels)  # [b, h]
+        x = self.emb(x)   # [b, h]
         x = x.unsqueeze(-1).expand(*x.shape, 344)  # [b, h, t]
         x = x + self.positional
         x = self.encoder(x)
@@ -801,7 +801,7 @@ class MDCDConfig:
                         [1, 1, 3, 3, 1]]
         self.band_ranges = [[0, 6], [0, 11], [0, 16], [0, 64]]
         self.transpose = [False, False, False, True]
-        self.segment_size = 12288
+        self.segment_size = 8192
 
 
 class SBD(torch.nn.Module):
@@ -968,7 +968,7 @@ class SynthesizerTrn(nn.Module):
                                           1,
                                           4,
                                           gin_channels=gin_channels)
-        self.fpn = FramePriorNetwork(inter_channels * 2, 17, 6)
+        self.fpn = FramePriorNetwork(inter_channels * 2, 35, 6)
 
 
         self.emb_g = nn.Embedding(n_class, gin_channels)

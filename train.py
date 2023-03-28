@@ -211,7 +211,7 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler,
         optim_g.zero_grad()
         scaler.scale(loss_gen_all).backward()
         scaler.unscale_(optim_g)
-        grad_norm_g = commons.clip_grad_value_(net_g.parameters(), None)
+        grad_norm_g = commons.clip_grad_value_(net_g.parameters(), 0.5)
         scaler.step(optim_g)
         scaler.update()
 

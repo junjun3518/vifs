@@ -2,19 +2,19 @@
   "train": {
     "log_interval": 50,
     "eval_interval": 1000,
-    "seed": 2048,
+    "seed": 1024,
     "epochs": 10000,
-    "learning_rate": 2e-5,
+    "learning_rate": 2e-4,
     "betas": [0.8, 0.9],
     "eps": 1e-8,
     "batch_size": 64,
-    "fp16_run": true,
+    "fp16_run": false,
     "lr_decay": 0.999875,
-    "segment_size":12288,
+    "segment_size":8192,
     "init_lr_ratio": 1,
     "warmup_epochs": 0,
     "c_mel": 15,
-    "c_kl": 0.25
+    "c_kl": 10
   },
   "data": {
     "max_wav_value": 32768.0,
