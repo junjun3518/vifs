@@ -91,7 +91,8 @@ class AudioSet(Dataset):
         max_length,
         filter_length,
         hop_length,
-        win_length
+        win_length,
+        pt_run=False,
     ):
         self.audio_files = audio_files
         self.max_length = max_length  # max length of audio
@@ -99,14 +100,18 @@ class AudioSet(Dataset):
         self.filter_length = filter_length
         self.hop_length = hop_length
         self.win_length = win_length
+        if pt_run:
+            for i in range(len(self.audio_files)):
+                _ = self.__getitem__(i, True)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index, pt_run =False):
         filename = self.audio_files[index]['file_path']
         class_id = self.audio_files[index][
             'class_id']  # datasets.get_class_id(filename)
         salience = 1  # datasets.get_salience(filename)
 
         sample_rate, audio = loadwav(filename)
+        audio = audio / np.abs(audio).max() * 0.95
         audio = audio / MAX_WAV_VALUE
 
         if sample_rate != self.sample_rate:
@@ -124,7 +129,7 @@ class AudioSet(Dataset):
                            'constant')
         audio = torch.tensor(audio, dtype=torch.float).unsqueeze(0)
         spec_filename = filename.replace(".wav", ".spec.pt")
-        if os.path.exists(spec_filename):
+        if os.path.exists(spec_filename) and not pt_run:
             spec = torch.load(spec_filename, map_location='cpu')
         else:
             spec = spectrogram_torch(

@@ -31,7 +31,7 @@ torch.backends.cudnn.benchmark = True
 global_step = 0
 
 
-def main():
+def main(args):
     """Assume Single Node Multi GPUs Training Only"""
     assert torch.cuda.is_available(), "CPU training is not allowed."
 
@@ -39,18 +39,19 @@ def main():
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '80000'
 
-    hps = utils.get_hparams()
+    hps = utils.get_hparams(args)
     mp.spawn(run, nprocs=n_gpus, args=(
         n_gpus,
         hps,
+        args,
     ))
 
 
-def run(rank, n_gpus, hps):
+def run(rank, n_gpus, hps, args):
     global global_step
     if rank == 0:
         logger = utils.get_logger(hps.model_dir)
-        logger.info(hps)
+        #logger.info(hps)
         utils.check_git_hash(hps.model_dir)
         writer = SummaryWriter(log_dir=hps.model_dir)
 
@@ -62,7 +63,7 @@ def run(rank, n_gpus, hps):
     torch.cuda.set_device(rank)
 
     train_file_list: List[dict] = get_dataset_filelist()
-    train_set = AudioSet(train_file_list, 22050, 22050 * 4, hps.data.filter_length, hps.data.hop_length, hps.data.win_length)
+    train_set = AudioSet(train_file_list, 22050, 22050 * 4, hps.data.filter_length, hps.data.hop_length, hps.data.win_length, args.initial_run and rank==0)
     train_sampler = DistributedSampler(
         train_set,
         num_replicas=n_gpus,
@@ -76,8 +77,14 @@ def run(rank, n_gpus, hps):
         num_workers=8,
         shuffle=False,
         pin_memory=True,
-	sampler=train_sampler
+	sampler=train_sampler,
     )
+    if args.initial_run:
+        if rank!=0:
+            print(f'rank: {rank} is waiting...')
+        dist.barrier()
+        if rank==0:
+            logger.info('Training Started')
 
     #
     #    train_dataset = TextAudioSpeakerLoader(hps.data.training_files, hps.data)
@@ -318,4 +325,40 @@ def evaluate(rank, hps, generator, writer):
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c',
+                        '--config',
+                        type=str,
+                        default="./configs/default.yaml",
+                        help='Path to configuration file')
+    parser.add_argument('-m',
+                        '--model',
+                        type=str,
+                        required=True,
+                        help='Model name')
+    parser.add_argument('-r',
+                        '--resume',
+                        type=str,
+                        help='Path to checkpoint for resume')
+    parser.add_argument('-f',
+                        '--force_resume',
+                        type=str,
+                        help='Path to checkpoint for force resume')
+    parser.add_argument('-t',
+                        '--transfer',
+                        type=str,
+                        help='Path to baseline checkpoint for transfer')
+    parser.add_argument('-w',
+                        '--ignore_warning',
+                        action="store_true",
+                        help='Ignore warning message')
+    parser.add_argument('-i',
+                        '--initial_run',
+                        action="store_true",
+                        help='Inintial run for saving pt files')
+    args = parser.parse_args()
+    if args.ignore_warning:
+        import warnings
+        warnings.filterwarnings(action='ignore')
+
+    main(args)

@@ -156,20 +156,7 @@ def load_filepaths_and_text(filename, split="|"):
     return filepaths_and_text
 
 
-def get_hparams(init=True):
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c',
-                        '--config',
-                        type=str,
-                        default="./configs/base.json",
-                        help='JSON file for configuration')
-    parser.add_argument('-m',
-                        '--model',
-                        type=str,
-                        required=True,
-                        help='Model name')
-
-    args = parser.parse_args()
+def get_hparams(args, init=True):
     model_dir = os.path.join("./logs", args.model)
 
     if not os.path.exists(model_dir):
