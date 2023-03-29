@@ -111,9 +111,9 @@ class AudioSet(Dataset):
         salience = 1  # datasets.get_salience(filename)
 
         sample_rate, audio = loadwav(filename)
-        audio = audio / np.abs(audio).max() * 0.95
         audio = audio / MAX_WAV_VALUE
-
+        audio = (audio / ((np.abs(audio)+1e-6).max()) ) * 0.95
+        
         if sample_rate != self.sample_rate:
             raise ValueError("{} sr doesn't match {} sr ".format(
                 sample_rate, self.sample_rate))
