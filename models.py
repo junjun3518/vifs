@@ -200,7 +200,8 @@ class PriorEncoder(nn.Module):
                 
 
     def forward(self, x):
-        x = self.emb(x)   # [b, h]
+        x = self.emb(x)  # [b, h]
+        x = x+ torch.randn_like(x)* self.hidden_channels**(-0.5)
         x = x.unsqueeze(-1).expand(*x.shape, 344)  # [b, h, t]
         x = x + self.positional
         x = self.encoder(x)
