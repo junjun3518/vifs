@@ -96,7 +96,7 @@ def evaluate(generator):
     generator.eval()
     with torch.no_grad():
         x = torch.arange(len(clas_dict), device=generator.device)
-        y_hat = generator.module.infer(x, 344)
+        y_hat = generator.module.infer(x, 344, noise_scale=0.667)
         y_hat_lengths = 344
 
     return y_hat
