@@ -63,29 +63,6 @@ def run(rank, n_gpus, hps, args):
     torch.manual_seed(hps.train.seed)
     torch.cuda.set_device(rank)
 
-    train_file_list: List[dict] = get_dataset_filelist()
-    train_set = AudioSet(train_file_list, 22050, 22050 * 4, hps.data.filter_length, hps.data.hop_length, hps.data.win_length, args.initial_run and rank==0)
-    train_sampler = DistributedSampler(
-        train_set,
-        num_replicas=n_gpus,
-        rank=rank,
-        shuffle=True,
-        drop_last=True,
-        )
-    train_loader = DataLoader(
-        train_set,
-        batch_size=hps.train.batch_size,
-        num_workers=8,
-        shuffle=False,
-        pin_memory=True,
-        sampler=train_sampler,
-        )
-    if args.initial_run:
-        if rank!=0:
-            print(f'rank: {rank} is waiting...')
-        dist.barrier()
-        if rank==0:
-            logger.info('Training Started')
 
     net_g = SynthesizerTrn(len(clas_dict),
                            hps.data.filter_length // 2 + 1,
@@ -95,7 +72,6 @@ def run(rank, n_gpus, hps, args):
 
     _, _, _, epoch_str = utils.load_checkpoint(
         utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g)
-    global_step = (epoch_str - 1) * len(train_loader)
 
 
     label_dict = dict({0: "DogBark", 1: "Footstep", 2: "GunShot", 3: "Keyboard",
@@ -108,11 +84,11 @@ def run(rank, n_gpus, hps, args):
             os.makedirs(directory, exist_ok=True)
 
 
-    for audio_idx in range(args.n_audio):
+    for audio_idx in range(args.n_audio//n_gpus):
         audios = evaluate(net_g)
         for class_idx in range(7):
             audio = audios[class_idx].squeeze(0).cpu().numpy()
-            sf.write(os.path.join(generated_dirs[class_idx], f"generated_{audio_idx}.wav"),
+            sf.write(os.path.join(generated_dirs[class_idx], f"generated_{audio_idx + args.n_audio//n_gpus *rank}.wav"),
                      audio, hps.data.sampling_rate)
 
 
@@ -142,22 +118,10 @@ if __name__ == "__main__":
                         '--resume',
                         type=str,
                         help='Path to checkpoint for resume')
-    parser.add_argument('-f',
-                        '--force_resume',
-                        type=str,
-                        help='Path to checkpoint for force resume')
-    parser.add_argument('-t',
-                        '--transfer',
-                        type=str,
-                        help='Path to baseline checkpoint for transfer')
     parser.add_argument('-w',
                         '--ignore_warning',
                         action="store_true",
                         help='Ignore warning message')
-    parser.add_argument('-i',
-                        '--initial_run',
-                        action="store_true",
-                        help='Inintial run for saving pt files')
     parser.add_argument('-n',
                         '--n_audio',
                         type=int,
