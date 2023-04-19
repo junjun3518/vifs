@@ -68,10 +68,14 @@ def run(rank, n_gpus, hps, args):
                            hps.data.filter_length // 2 + 1,
                            hps.train.segment_size // hps.data.hop_length,
                            **hps.model).cuda(rank)
+    net_d = AvocodoDiscriminator(hps.model.use_spectral_norm).cuda(rank)
     net_g = DDP(net_g, device_ids=[rank])
+    net_d = DDP(net_d, device_ids=[rank])
 
     _, _, _, epoch_str = utils.load_checkpoint(
         utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g)
+    _, _, _, epoch_str = utils.load_checkpoint(
+        utils.latest_checkpoint_path(hps.model_dir, "D_*.pth"), net_d)
 
 
     label_dict = dict({0: "DogBark", 1: "Footstep", 2: "GunShot", 3: "Keyboard",
@@ -85,21 +89,24 @@ def run(rank, n_gpus, hps, args):
 
 
     for audio_idx in range(args.n_audio//n_gpus):
-        audios = evaluate(net_g)
+        audios, score = evaluate(net_g, net_d)
+        print(score.size())
         for class_idx in range(7):
             audio = audios[class_idx].squeeze(0).cpu().numpy()
-            sf.write(os.path.join(generated_dirs[class_idx], f"generated_{audio_idx + args.n_audio//n_gpus *rank}.wav"),
-                     audio, hps.data.sampling_rate)
+            filename = f"generated_{audio_idx + args.n_audio//n_gpus *rank}_score={score[class_idx]}.wav"
+            sf.write(os.path.join(generated_dirs[class_idx], filename), audio, hps.data.sampling_rate)
 
 
-def evaluate(generator):
+def evaluate(generator, discriminator):
     generator.eval()
+    discriminator.eval()
     with torch.no_grad():
         x = torch.arange(len(clas_dict), device=generator.device)
         y_hat = generator.module.infer(x, 344, noise_scale=0.667)
+        d_score = discriminator.module.infer(y_hat)
         y_hat_lengths = 344
 
-    return y_hat
+    return y_hat, d_score
 
 
 if __name__ == "__main__":
