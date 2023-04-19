@@ -890,6 +890,18 @@ class AvocodoDiscriminator(nn.Module):
         fmap_c_gs.extend(fmap_s_gs)
         return y_c_rs, y_c_gs, fmap_c_rs, fmap_c_gs
 
+    def infer(self, y):
+        ys = [
+            self.combd.pqmf_list[0].analysis(y)[:, :1],  #lv2
+            self.combd.pqmf_list[1].analysis(y)[:, :1],  #lv1
+            y
+        ]
+        dummy = [torch.zeros_like(_y) for _y in ys]
+        y_c_rs, _, _, _ = self.combd(ys, dummy)
+        y_s_rs, _, _, _ = self.sbd(y, dummy[-1])
+        y_c_rs.extend(y_s_rs)
+        score = sum([y_c_r.mean().item() for  y_c_r in y_c_rs])
+        return score
 
 ##### Avocodo
 
