@@ -186,8 +186,7 @@ class PriorEncoder(nn.Module):
 
         self.emb = nn.Embedding(n_class, hidden_channels)
         nn.init.normal_(self.emb.weight, 0.0, hidden_channels**-0.5)
-        _positional = torch.zeros(1, hidden_channels, 344)
-        self.register_buffer("positional", _positional)
+        self.positional = nn.Parameter(torch.zeros(1, hidden_channels, 344))
         #self.encoder = attentions.Encoder(hidden_channels, filter_channels,
         #                                  n_heads, n_layers, kernel_size,
         #                                  p_dropout)
