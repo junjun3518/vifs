@@ -896,11 +896,10 @@ class AvocodoDiscriminator(nn.Module):
             self.combd.pqmf_list[1].analysis(y)[:, :1],  #lv1
             y
         ]
+        B = y.shape[0]
         dummy = [torch.zeros_like(_y) for _y in ys]
         y_c_rs, _, _, _ = self.combd(ys, dummy)
-        y_s_rs, _, _, _ = self.sbd(y, dummy[-1])
-        y_c_rs.extend(y_s_rs)
-        score = sum([y_c_r.mean().item() for  y_c_r in y_c_rs])
+        score = torch.stack([y_c_r[:B].mean((1,2)) for  y_c_r in y_c_rs], dim =-1).mean(-1)
         return score
 
 ##### Avocodo

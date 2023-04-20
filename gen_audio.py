@@ -60,7 +60,6 @@ def run(rank, n_gpus, hps, args):
                             init_method='env://',
                             world_size=n_gpus,
                             rank=rank)
-    torch.manual_seed(hps.train.seed)
     torch.cuda.set_device(rank)
 
 
@@ -93,7 +92,7 @@ def run(rank, n_gpus, hps, args):
         print(score.size())
         for class_idx in range(7):
             audio = audios[class_idx].squeeze(0).cpu().numpy()
-            filename = f"generated_{audio_idx + args.n_audio//n_gpus *rank}_score={score[class_idx]}.wav"
+            filename = f"generated_score={score[class_idx]:05f}.wav"
             sf.write(os.path.join(generated_dirs[class_idx], filename), audio, hps.data.sampling_rate)
 
 
