@@ -94,6 +94,8 @@ def run(rank, n_gpus, hps, args):
             audio = audios[class_idx].squeeze(0).cpu().numpy()
             filename = f"generated_score={score[class_idx]:05f}.wav"
             sf.write(os.path.join(generated_dirs[class_idx], filename), audio, hps.data.sampling_rate)
+            
+    torch.save(net_g.module.enc_p.emb.cpu(), os.path.join(generated_dir, "class_embedding.pt"))
 
 
 def evaluate(generator, discriminator):
