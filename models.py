@@ -983,13 +983,13 @@ class SynthesizerTrn(nn.Module):
         self.emb_g = nn.Embedding(n_class, gin_channels)
 
     def forward(self, x, x_lengths, y):
+        g = self.emb_g(x).unsqueeze(-1)  # [b, h, 1]
         z, m_q, logs_q = self.enc_q(y, g=g)  # [B,T,h]
         prior_z = torch.sum(z * torch.softmax(z.norm(dim=-1), dim=1).unsqueeze(-1), dim = 1)
         prior_z = F.normalize(prior_z, dim=1)
         z_p = self.flow(z, g=g)
         stats = self.enc_p(x, prior_z)
         m_p, logs_p = self.fpn(stats)
-        g = self.emb_g(x).unsqueeze(-1)  # [b, h, 1]
 
         z_slice, ids_slice = commons.rand_slice_segments(
             z, x_lengths, self.segment_size)
