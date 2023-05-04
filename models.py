@@ -985,10 +985,13 @@ class SynthesizerTrn(nn.Module):
     def forward(self, x, x_lengths, y):
         g = self.emb_g(x).unsqueeze(-1)  # [b, h, 1]
         z, m_q, logs_q = self.enc_q(y, g=g)  # [B,D,T]
-        prior_z = torch.sum(z * torch.softmax(z.norm(dim=1), dim=1).unsqueeze(1), dim = -1)
-        prior_z = F.normalize(prior_z, dim=1)
+#        prior_z = torch.sum(z * torch.softmax(z.norm(dim=1), dim=1).unsqueeze(1), dim = -1)
+        prior_z = torch.mean(m_q, dim=-1)
+        prior_z = prior_z - torch.mean(prior_z)
+        prior_z = prior_z/(prior_z.std() +1e-4)
+
         z_p = self.flow(z, g=g)
-        stats = self.enc_p(x, prior_z)
+        stats = self.enc_p(x, prior_z.detach())
         m_p, logs_p = self.fpn(stats)
 
         z_slice, ids_slice = commons.rand_slice_segments(
