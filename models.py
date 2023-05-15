@@ -956,6 +956,7 @@ class SynthesizerTrn(nn.Module):
             1,
             6,
         )
+        self.att = nn.Conv1d(hidden_channels, hidden_channels,1)
 
         self.dec = Generator(inter_channels,
                              resblock,
@@ -985,19 +986,19 @@ class SynthesizerTrn(nn.Module):
     def forward(self, x, x_lengths, y):
         g = self.emb_g(x).unsqueeze(-1)  # [b, h, 1]
         z, m_q, logs_q = self.enc_q(y, g=g)  # [B,D,T]
-#        prior_z = torch.sum(z * torch.softmax(z.norm(dim=1), dim=1).unsqueeze(1), dim = -1)
-        prior_z = torch.mean(m_q, dim=-1)
-        prior_z = prior_z - torch.mean(prior_z)
-        prior_z = prior_z/(prior_z.std() +1e-4)
+        prior_z = torch.sum(z * torch.softmax(torch.tanh(self.att(m_q)), dim=-1), dim = -1)
+#        prior_z = torch.mean(m_q, dim=-1)
+#        prior_z = prior_z - torch.mean(prior_z)
+#        prior_z = prior_z/(prior_z.std() +1e-4)
 
         z_p = self.flow(z, g=g)
-        stats = self.enc_p(x, prior_z.detach())
+        stats = self.enc_p(x, prior_z)
         m_p, logs_p = self.fpn(stats)
 
         z_slice, ids_slice = commons.rand_slice_segments(
             z, x_lengths, self.segment_size)
         o = self.dec.hier_forward(z_slice, g=g)
-        return o, ids_slice, (z, z_p, m_p, logs_p, m_q, logs_q)
+        return o, ids_slice, (z, z_p, m_p, logs_p, m_q, logs_q), (prior_z.mean(), prior_z.std())
 
     def infer(
         self,
