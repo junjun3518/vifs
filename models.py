@@ -66,12 +66,7 @@ class StochasticDurationPredictor(nn.Module):
         if gin_channels != 0:
             self.cond = nn.Conv1d(gin_channels, filter_channels, 1)
 
-    def forward(self,
-                x,
-                w=None,
-                g=None,
-                reverse=False,
-                noise_scale=1.0):
+    def forward(self, x, w=None, g=None, reverse=False, noise_scale=1.0):
         x = torch.detach(x)
         x = self.pre(x)
         if g is not None:
@@ -88,20 +83,19 @@ class StochasticDurationPredictor(nn.Module):
             h_w = self.post_pre(w)
             h_w = self.post_convs(h_w)
             h_w = self.post_proj(h_w)
-            e_q = torch.randn(w.size(0), 2, w.size(2)).to(
-                device=x.device, dtype=x.dtype)
+            e_q = torch.randn(w.size(0), 2, w.size(2)).to(device=x.device,
+                                                          dtype=x.dtype)
             z_q = e_q
             for flow in self.post_flows:
                 z_q, logdet_q = flow(z_q, g=(x + h_w))
                 logdet_tot_q += logdet_q
             z_u, z1 = torch.split(z_q, [1, 1], 1)
-            u = torch.sigmoid(z_u) 
-            z0 = (w - u) 
-            logdet_tot_q += torch.sum(
-                (F.logsigmoid(z_u) + F.logsigmoid(-z_u)) , [1, 2])
-            logq = torch.sum(
-                -0.5 * (math.log(2 * math.pi) +
-                        (e_q**2)) , [1, 2]) - logdet_tot_q
+            u = torch.sigmoid(z_u)
+            z0 = (w - u)
+            logdet_tot_q += torch.sum((F.logsigmoid(z_u) + F.logsigmoid(-z_u)),
+                                      [1, 2])
+            logq = torch.sum(-0.5 * (math.log(2 * math.pi) +
+                                     (e_q**2)), [1, 2]) - logdet_tot_q
 
             logdet_tot = 0
             z0, logdet = self.log_flow(z0)
@@ -166,7 +160,7 @@ class DurationPredictor(nn.Module):
         x = torch.relu(x)
         x = self.norm_1(x)
         x = self.drop(x)
-        x = self.conv_2(x )
+        x = self.conv_2(x)
         x = torch.relu(x)
         x = self.norm_2(x)
         x = self.drop(x)
@@ -176,8 +170,8 @@ class DurationPredictor(nn.Module):
 
 class PriorEncoder(nn.Module):
 
-    def __init__(self, n_class, out_channels, hidden_channels, kernel_size, dilation_rate, n_layers
-                 ):
+    def __init__(self, n_class, out_channels, hidden_channels, kernel_size,
+                 dilation_rate, n_layers):
         super().__init__()
         self.out_channels = out_channels
         self.hidden_channels = hidden_channels
@@ -186,26 +180,27 @@ class PriorEncoder(nn.Module):
 
         self.emb = nn.Embedding(n_class, hidden_channels)
         nn.init.normal_(self.emb.weight, 0.0, hidden_channels**-0.5)
-        _positional = torch.zeros(1, hidden_channels, 344)
-        self.register_buffer("positional", _positional)
+        self.positional = nn.Parameter(torch.zeros(1, hidden_channels, 344))
         #self.encoder = attentions.Encoder(hidden_channels, filter_channels,
         #                                  n_heads, n_layers, kernel_size,
         #                                  p_dropout)
         self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
         self.encoder = modules.WN(hidden_channels,
-                              kernel_size,
-                              dilation_rate,
-                              n_layers,
-                              gin_channels=0)
-                
+                                  kernel_size,
+                                  dilation_rate,
+                                  n_layers,
+                                  gin_channels=0)
 
-    def forward(self, x):
-        x = self.emb(x)   # [b, h]
-        x = x+ torch.randn_like(x)* self.hidden_channels**(-0.5)
+    def forward(self, x, z=None):
+        x = self.emb(x)  # [b, h]
+        if z is None:
+            x = x + torch.randn_like(x) * self.hidden_channels**(-0.5)
+        else:
+            x = x + z * self.hidden_channels**(-0.5)
         x = x.unsqueeze(-1).expand(*x.shape, 344)  # [b, h, t]
         x = x + self.positional
         x = self.encoder(x)
-        stats = self.proj(x) 
+        stats = self.proj(x)
 
         #m, logs = torch.split(stats, self.out_channels, dim=1)
         return stats
@@ -220,22 +215,22 @@ class FramePriorNetwork(nn.Module):
         self.n_layers = n_layers
         self.convs = nn.ModuleList()
         for i in range(n_layers):
-            self.convs.append(weight_norm(
-                nn.Conv1d(channels,
-                          channels,
-                          kernel_size,
-                          1,
-                          dilation=1,
-                          padding=get_padding(kernel_size, 1))))
-    
+            self.convs.append(
+                weight_norm(
+                    nn.Conv1d(channels,
+                              channels,
+                              kernel_size,
+                              1,
+                              dilation=1,
+                              padding=get_padding(kernel_size, 1))))
+
     def forward(self, x):
         for i in range(self.n_layers):
             xt = F.leaky_relu(x, 0.2)
-            xt= self.convs[i](xt)
-            x= xt+x
-        m, logs = torch.split(x, self.channels//2, dim=1)
+            xt = self.convs[i](xt)
+            x = xt + x
+        m, logs = torch.split(x, self.channels // 2, dim=1)
         return m, logs
-
 
 
 class ResidualCouplingBlock(nn.Module):
@@ -306,12 +301,12 @@ class PosteriorEncoder(nn.Module):
                               gin_channels=gin_channels)
         self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
 
-    def forward(self, x,  g=None):
+    def forward(self, x, g=None):
         x = self.pre(x)
         x = self.enc(x, g=g)
-        stats = self.proj(x) 
+        stats = self.proj(x)
         m, logs = torch.split(stats, self.out_channels, dim=1)
-        z = (m + torch.randn_like(m) * torch.exp(logs)) 
+        z = (m + torch.randn_like(m) * torch.exp(logs))
         return z, m, logs
 
 
@@ -890,6 +885,19 @@ class AvocodoDiscriminator(nn.Module):
         fmap_c_gs.extend(fmap_s_gs)
         return y_c_rs, y_c_gs, fmap_c_rs, fmap_c_gs
 
+    def infer(self, y):
+        ys = [
+            self.combd.pqmf_list[0].analysis(y)[:, :1],  #lv2
+            self.combd.pqmf_list[1].analysis(y)[:, :1],  #lv1
+            y
+        ]
+        B = y.shape[0]
+        dummy = [torch.zeros_like(_y) for _y in ys]
+        y_c_rs, _, _, _ = self.combd(ys, dummy)
+        score = torch.stack([y_c_r[:B].mean((1, 2)) for y_c_r in y_c_rs],
+                            dim=-1).mean(-1)
+        return score
+
 
 ##### Avocodo
 
@@ -940,13 +948,15 @@ class SynthesizerTrn(nn.Module):
         self.segment_size = segment_size
         self.gin_channels = gin_channels
 
-
-        self.enc_p = PriorEncoder(n_class,
-                                      inter_channels,
-                                      hidden_channels,
-                                      5,
-                                      1,
-                                      6,)
+        self.enc_p = PriorEncoder(
+            n_class,
+            inter_channels,
+            hidden_channels,
+            5,
+            1,
+            6,
+        )
+        self.att = nn.Conv1d(hidden_channels, hidden_channels,1)
 
         self.dec = Generator(inter_channels,
                              resblock,
@@ -971,35 +981,37 @@ class SynthesizerTrn(nn.Module):
                                           gin_channels=gin_channels)
         self.fpn = FramePriorNetwork(inter_channels * 2, 35, 6)
 
-
         self.emb_g = nn.Embedding(n_class, gin_channels)
 
     def forward(self, x, x_lengths, y):
-
-        stats  = self.enc_p(x)
-        m_p, logs_p = self.fpn(stats)
         g = self.emb_g(x).unsqueeze(-1)  # [b, h, 1]
+        z, m_q, logs_q = self.enc_q(y, g=g)  # [B,D,T]
+        prior_z = torch.sum(z * torch.softmax(torch.tanh(self.att(m_q)), dim=-1), dim = -1)
+#        prior_z = torch.mean(m_q, dim=-1)
+#        prior_z = prior_z - torch.mean(prior_z)
+#        prior_z = prior_z/(prior_z.std() +1e-4)
 
-        z, m_q, logs_q = self.enc_q(y, g=g)
         z_p = self.flow(z, g=g)
+        stats = self.enc_p(x, prior_z)
+        m_p, logs_p = self.fpn(stats)
 
         z_slice, ids_slice = commons.rand_slice_segments(
             z, x_lengths, self.segment_size)
         o = self.dec.hier_forward(z_slice, g=g)
-        return o, ids_slice, (z, z_p, m_p, logs_p, m_q, logs_q)
+        return o, ids_slice, (z, z_p, m_p, logs_p, m_q, logs_q), (prior_z.mean(), prior_z.std())
 
-    def infer(self,
-              x,
-              x_lengths,
-              noise_scale=1,
-              length_scale=1,
-              noise_scale_w=1.,
-              ):
+    def infer(
+        self,
+        x,
+        x_lengths,
+        noise_scale=1,
+        length_scale=1,
+        noise_scale_w=1.,
+    ):
         stats = self.enc_p(x)
         m_p, logs_p = self.fpn(stats)
 
         g = self.emb_g(x).unsqueeze(-1)  # [b, h, 1]
-
 
         z_p = m_p + torch.randn_like(m_p) * torch.exp(logs_p) * noise_scale
         z = self.flow(z_p, g=g, reverse=True)

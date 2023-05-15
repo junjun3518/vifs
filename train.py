@@ -126,9 +126,11 @@ def run(rank, n_gpus, hps, args):
         global_step = 0
 
     scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
-        optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2)
+        optim_g, gamma=hps.train.lr_decay,)
+    scheduler_g.last_epoch=epoch_str - 2
     scheduler_d = torch.optim.lr_scheduler.ExponentialLR(
-        optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2)
+        optim_d, gamma=hps.train.lr_decay,)
+    scheduler_d.last_epoch=epoch_str - 2
 
     scaler = GradScaler(enabled=hps.train.fp16_run)
 
@@ -165,7 +167,7 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler,
         y= y.cuda(rank, non_blocking=True)
         with autocast(enabled=hps.train.fp16_run):
             y_hat, ids_slice,\
-            (z, z_p, m_p, logs_p, m_q, logs_q) = net_g(x, x_lengths, spec)
+            (z, z_p, m_p, logs_p, m_q, logs_q), (z_m, z_std) = net_g(x, x_lengths, spec)
 
             mel = spec_to_mel_torch(spec, hps.data.filter_length,
                                     hps.data.n_mel_channels,
@@ -214,7 +216,7 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler,
 
                 loss_fm = feature_loss(fmap_r, fmap_g)
                 loss_gen, losses_gen = generator_loss(y_d_hat_g)
-                loss_gen_all = loss_gen + loss_fm + loss_mel + loss_kl
+                loss_gen_all = loss_gen + loss_fm + loss_mel + loss_kl + z_m**2 + (z_std-1.)**2
         optim_g.zero_grad()
         scaler.scale(loss_gen_all).backward()
         scaler.unscale_(optim_g)
